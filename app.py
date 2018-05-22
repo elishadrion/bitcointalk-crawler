@@ -59,30 +59,35 @@ class Crawler(Thread):
         try:
             link = self.scraper.get(tag.attrs['href'])
             soup = BeautifulSoup(link.content, "html.parser")
-            #title = soup.findChild("td",  {"id": "top_subject"})
-            #print (title.contents[0].split())
-
-            #for span in soup.find_all('span'):
-                #results.append(span)
-            #for result in results[3:10]
-
             #date_tag is None if the thread is too "old"
+            month = self.month
+            year = YEAR
             date_tag = None
-			#We suppose the date of the thread's creation is in the first few tags from experience
+            #We suppose the date of the thread's creation is in the first few tags from experience
             for result in soup.find_all('span')[3:10]:
-                if str(YEAR) in result.contents[0] and self.month in result.contents[0]:
+                if "Today" in result.contents[0] or (str(YEAR) in result.contents[0] and self.month in result.contents[0]):
                     date_tag = result
+                else:
+                    #For data later, so we know which project was published which month
+                    try:
+                        for element in result.contents[0].split():
+                            if date.get(element):
+                                month = element
+                                #year is always the third element
+                                year = result.contents[0].split()[2]
+                    except:
+                        pass
 
+            #if it's the correct year and month, we append to the files
             if date_tag:
                 print (tag.contents[0])
                 print (tag.attrs['href'])
                 print ("------------------")
                 with open(self.txt_file, "a", encoding="utf8") as text_file:
                     txt = " ".join(tag.contents[0].split())
-                    txt = txt[7:]
                     text_file.write(txt+ "\n" + tag.attrs['href'] +"\n ----- \n")
-            #insertion dans la bdd
-            self.table.insert(dict(thread_id=tag.attrs['href'][40:]))
+            #We insert in both cases in the database
+            self.table.insert(dict(thread_id=tag.attrs['href'][40:], time=time.time(), month=month, year=year))
         except:
             pass
 
