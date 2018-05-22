@@ -35,6 +35,7 @@ class Crawler(Thread):
         self.table = self.db["bitcointalk"]
         self.txt_file = month+".txt"
         self.scraper = cfscrape.create_scraper()
+        self.month = month.title()
         if token:
             self.db = dataset.connect("sqlite:///database_tokens.db")
             self.table = self.db["bitcointalk_tokens"]
@@ -43,34 +44,45 @@ class Crawler(Thread):
     def parse_main_page(self, board_number):
         link = self.scraper.get(self.start_url[:-2]+".{}".format(board_number))
         soup = BeautifulSoup(link.content, "html.parser")
-        #lien précédent visité
-        for span in soup.findChildren("span"):
-            for a in soup.findChildren("a"):
-                try:
-                    #il faut qu"il y ait "topic=" car c"est un thread et pas un autre type de lien
-                    #et les threads terminent par ".0"
-                    if a["href"].find("topic=") != -1 and a["href"][-2] == ".":
-                        #on vérifie que c"est un nouveau lien et qu"il n"est pas présent dans la base de donnée
-                        if not self.table.find_one(thread_id=a["href"][40:]):
-                            self.parse_thread(a["href"])
-                except:
-                    pass
+        for span in soup.find_all('span'):
+            for result in span.find_all('a'):
+                #Be sure that it's a link concerning a thread
+                if len(result) and "topic" in result.attrs['href']:
+                    try:
+                        #Check if it's not in the database already
+                        if not self.table.find_one(thread_id=result.attrs['href'][40:]):
+                            self.parse_thread(result)
+                    except:
+                        pass
 
-    def parse_thread(self, url):
+    def parse_thread(self, tag):
         try:
-            thread_id = url[40:]
-            link = self.scraper.get(url)
+            link = self.scraper.get(tag.attrs['href'])
             soup = BeautifulSoup(link.content, "html.parser")
-            title = soup.findChild("td",  {"id": "top_subject"})
-            print (title.contents[0].split())
-            print(url)
-            print("------------------")
-            with open(self.txt_file, "a", encoding="utf8") as text_file:
-                txt = " ".join(title.contents[0].split())
-                txt = txt[7:]
-                text_file.write(txt+ "\n" + url+"\n ----- \n")
+            #title = soup.findChild("td",  {"id": "top_subject"})
+            #print (title.contents[0].split())
+
+            #for span in soup.find_all('span'):
+                #results.append(span)
+            #for result in results[3:10]
+
+            #date_tag is None if the thread is too "old"
+            date_tag = None
+			#We suppose the date of the thread's creation is in the first few tags from experience
+            for result in soup.find_all('span')[3:10]:
+                if str(YEAR) in result.contents[0] and self.month in result.contents[0]:
+                    date_tag = result
+
+            if date_tag:
+                print (tag.contents[0])
+                print (tag.attrs['href'])
+                print ("------------------")
+                with open(self.txt_file, "a", encoding="utf8") as text_file:
+                    txt = " ".join(tag.contents[0].split())
+                    txt = txt[7:]
+                    text_file.write(txt+ "\n" + tag.attrs['href'] +"\n ----- \n")
             #insertion dans la bdd
-            self.table.insert(dict(thread_id=thread_id))
+            self.table.insert(dict(thread_id=tag.attrs['href'][40:]))
         except:
             pass
 
@@ -86,8 +98,8 @@ class Crawler(Thread):
 
 def main():
     # Création des threads
-    thread_1 = Crawler("https://bitcointalk.org/index.php?board=159.0", 26360, "may")
-    thread_2 = Crawler("https://bitcointalk.org/index.php?board=240.0", 4200, "may", token=True)
+    thread_1 = Crawler("https://bitcointalk.org/index.php?board=159.0", 30000, "may")
+    thread_2 = Crawler("https://bitcointalk.org/index.php?board=240.0", 5000, "may", token=True)
 
 
     # Lancement des threads
